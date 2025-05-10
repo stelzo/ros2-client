@@ -24,7 +24,7 @@ use crate::{
   names::*,
   node::{Node, NodeOptions},
   pubsub::{Publisher, Subscription},
-  NodeCreateError,
+  NodeCreateError, PublisherRaw,
 };
 
 lazy_static! {
@@ -252,6 +252,18 @@ impl Context {
       .create_datawriter_no_key(topic, qos)?;
 
     Ok(Publisher::new(datawriter))
+  }
+
+  pub(crate) fn create_publisher_raw(
+    &self,
+    topic: &Topic,
+    qos: Option<QosPolicies>,
+  ) -> dds::CreateResult<PublisherRaw> {
+    let datawriter = self
+      .get_ros_default_publisher()
+      .create_datawriter_no_key(topic, qos)?;
+
+    Ok(PublisherRaw::new(datawriter))
   }
 
   pub(crate) fn create_subscription<M>(

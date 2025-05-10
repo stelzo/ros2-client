@@ -35,6 +35,7 @@ use crate::{
   ros_time::ROSTime,
   rosout::{NodeLoggingHandle, RosoutRaw},
   service::{Client, Server, Service, ServiceMapping},
+  PublisherRaw,
 };
 
 type ParameterFunc = dyn Fn(&str, &ParameterValue) -> SetParametersResult + Send + Sync;
@@ -1270,6 +1271,16 @@ impl Node {
     qos: Option<QosPolicies>,
   ) -> CreateResult<Publisher<D>> {
     let p = self.ros_context.create_publisher(topic, qos)?;
+    self.add_writer(p.guid().into());
+    Ok(p)
+  }
+
+  pub fn create_publisher_raw(
+    &mut self,
+    topic: &Topic,
+    qos: Option<QosPolicies>,
+  ) -> CreateResult<PublisherRaw> {
+    let p = self.ros_context.create_publisher_raw(topic, qos)?;
     self.add_writer(p.guid().into());
     Ok(p)
   }

@@ -1,5 +1,6 @@
 use std::{io, marker::PhantomData};
 
+use bytes::Bytes;
 use mio::{Evented, Poll, PollOpt, Ready, Token};
 use futures::{
   pin_mut,
@@ -8,6 +9,7 @@ use futures::{
 };
 use rustdds::{
   dds::{ReadError, ReadResult, WriteResult},
+  no_key::DataWriter,
   serialization::CdrDeserializeSeedDecoder,
   *,
 };
@@ -21,6 +23,83 @@ use super::{gid::Gid, message_info::MessageInfo, node::Node};
 /// DDS
 pub struct Publisher<M: Serialize> {
   datawriter: no_key::DataWriterCdr<M>,
+}
+
+// Raw
+pub type DataWriterRaw = DataWriter<Vec<u8>, RawSerializerAdapter>;
+
+pub struct PublisherRaw {
+  datawriter: DataWriterRaw,
+}
+
+pub struct RawSerializerAdapter {}
+
+impl no_key::SerializerAdapter<Vec<u8>> for RawSerializerAdapter {
+  type Error = std::io::Error;
+
+  fn output_encoding() -> RepresentationIdentifier {
+    RepresentationIdentifier::CDR_LE // unknown when just passing through
+  }
+
+  fn to_bytes(value: &Vec<u8>) -> Result<Bytes, Self::Error> {
+    let buffer: Vec<u8> = value.clone();
+    Ok(Bytes::from(buffer))
+  }
+}
+impl PublisherRaw {
+  // These must be created from Node
+  pub(crate) fn new(datawriter: DataWriterRaw) -> Self {
+    Self { datawriter }
+  }
+
+  pub fn publish(&self, message: Vec<u8>) -> WriteResult<(), Vec<u8>> {
+    self.datawriter.write(message, Some(Timestamp::now()))
+  }
+
+  pub fn assert_liveliness(&self) -> WriteResult<(), ()> {
+    self.datawriter.assert_liveliness()
+  }
+
+  pub fn guid(&self) -> rustdds::GUID {
+    self.datawriter.guid()
+  }
+
+  pub fn gid(&self) -> Gid {
+    self.guid().into()
+  }
+
+  /// Returns the count of currently matched subscribers.
+  ///
+  /// `my_node` must be the Node that created this Publisher, or the result is
+  /// undefined.
+  pub fn get_subscription_count(&self, my_node: &Node) -> usize {
+    my_node.get_subscription_count(self.guid())
+  }
+
+  /// Waits until there is at least one matched subscription on this topic,
+  /// possibly forever.
+  ///
+  /// `my_node` must be the Node that created this Subscription, or the length
+  /// of the wait is undefined.
+  pub fn wait_for_subscription(&self, my_node: &Node) -> impl Future<Output = ()> + Send {
+    my_node.wait_for_reader(self.guid())
+  }
+
+  pub async fn async_publish(&self, message: Vec<u8>) -> WriteResult<(), Vec<u8>> {
+    self
+      .datawriter
+      .async_write(message, Some(Timestamp::now()))
+      .await
+  }
+
+  #[allow(dead_code)] // This is for async Service implementation. Remove this when it is implemented.
+  pub(crate) async fn async_publish_with_options(
+    &self,
+    message: Vec<u8>,
+    wo: WriteOptions,
+  ) -> dds::WriteResult<rustdds::rpc::SampleIdentity, Vec<u8>> {
+    self.datawriter.async_write_with_options(message, wo).await
+  }
 }
 
 impl<M: Serialize> Publisher<M> {
