@@ -38,7 +38,7 @@ impl no_key::SerializerAdapter<Vec<u8>> for RawSerializerAdapter {
   type Error = std::io::Error;
 
   fn output_encoding() -> RepresentationIdentifier {
-    RepresentationIdentifier::CDR_LE // unknown when just passing through
+    RepresentationIdentifier::CDR_LE // TODO detect from header
   }
 
   fn to_bytes(value: &Vec<u8>) -> Result<Bytes, Self::Error> {
